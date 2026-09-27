@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::println(stderr, "Usage: {} <count|positions|primes> [path_to_file]", argv[0]);
+        std::println(stderr, "Usage: {} <count|positions|primes|sort> [path_to_file]", argv[0]);
         return 1;
     }
 
@@ -51,6 +51,19 @@ int main(int argc, char* argv[]) {
 
         auto start = std::chrono::high_resolution_clock::now();
         squarePrimes(numbers);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        for (int n : numbers) {
+            std::print("{} ", n);
+        }
+        std::println("");
+        std::println(stderr, "Time: {:.3f} ms",
+            std::chrono::duration<double, std::milli>(end - start).count());
+    } else if (mode == "sort") {
+        std::vector<int> numbers = {5, 2, 9, 4, 1, 8, 3, 6, 7, 10};
+
+        auto start = std::chrono::high_resolution_clock::now();
+        sortOddAscEvenDesc(numbers);
         auto end = std::chrono::high_resolution_clock::now();
 
         for (int n : numbers) {

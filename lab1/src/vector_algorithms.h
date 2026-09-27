@@ -14,3 +14,9 @@ bool isPrime(int n);
  * @param numbers Vector to modify.
  */
 void squarePrimes(std::vector<int>& numbers);
+
+/**
+ * @brief Sorts the vector: odd numbers ascending first, then even numbers descending.
+ * @param numbers Vector to sort, in place.
+ */
+void sortOddAscEvenDesc(std::vector<int>& numbers);

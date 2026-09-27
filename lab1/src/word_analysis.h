@@ -26,3 +26,11 @@ std::unordered_map<std::string, int> countWords(const std::string& text);
  */
 std::vector<std::pair<std::string, int>> sortByCount(
     const std::unordered_map<std::string, int>& wordCount);
+
+/**
+ * @brief Indexes the position (word index, not byte offset) of every occurrence
+ * of each unique word in the given UTF-8 text.
+ * @param text Input text, UTF-8 encoded.
+ * @return Map from word to a vector of its positions (0-based word index) in the text.
+ */
+std::unordered_map<std::string, std::vector<int>> indexWordPositions(const std::string& text);

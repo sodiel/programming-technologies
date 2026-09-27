@@ -8,26 +8,14 @@ namespace {
 
 using WordPair = std::pair<std::string, int>;
 
-/**
- * @brief Determines how many bytes a UTF-8 character starting at this byte occupies.
- * @param leadByte The first byte of a (potentially multi-byte) UTF-8 character.
- * @return Number of bytes the character occupies (1 to 4).
- */
 int utf8CharLength(unsigned char leadByte) {
-    if ((leadByte & 0x80) == 0x00) return 1; // 0xxxxxxx -> ASCII
-    if ((leadByte & 0xE0) == 0xC0) return 2; // 110xxxxx -> 2-byte sequence
-    if ((leadByte & 0xF0) == 0xE0) return 3; // 1110xxxx -> 3-byte sequence
-    if ((leadByte & 0xF8) == 0xF0) return 4; // 11110xxx -> 4-byte sequence
-    return 1; // invalid lead byte, treat as single byte to avoid infinite loops
+    if ((leadByte & 0x80) == 0x00) return 1;
+    if ((leadByte & 0xE0) == 0xC0) return 2;
+    if ((leadByte & 0xF0) == 0xE0) return 3;
+    if ((leadByte & 0xF8) == 0xF0) return 4;
+    return 1;
 }
 
-/**
- * @brief Decodes a UTF-8 code point into its Unicode scalar value.
- * @param text Full text buffer.
- * @param pos Byte offset where the character starts.
- * @param length Number of bytes this character occupies (from utf8CharLength).
- * @return The Unicode code point, or 0 if the sequence is malformed/out of bounds.
- */
 char32_t decodeUtf8CodePoint(const std::string& text, size_t pos, int length) {
     if (pos + static_cast<size_t>(length) > text.size()) return 0;
 
@@ -46,55 +34,36 @@ char32_t decodeUtf8CodePoint(const std::string& text, size_t pos, int length) {
 
     for (int i = 1; i < length; ++i) {
         unsigned char continuationByte = static_cast<unsigned char>(text[pos + i]);
-        if ((continuationByte & 0xC0) != 0x80) return 0; // not a valid continuation byte
+        if ((continuationByte & 0xC0) != 0x80) return 0;
         codePoint = (codePoint << 6) | (continuationByte & 0x3F);
     }
 
     return codePoint;
 }
 
-/**
- * @brief Checks whether a Unicode code point is a letter we treat as part of a word.
- * Covers ASCII letters, Cyrillic letters (basic block), and the hyphen.
- * @param codePoint Unicode scalar value.
- * @return true if the code point should be treated as a word character.
- */
 bool isWordCodePoint(char32_t codePoint) {
-    // ASCII letters
     if ((codePoint >= U'a' && codePoint <= U'z') ||
         (codePoint >= U'A' && codePoint <= U'Z')) {
         return true;
     }
-    // Cyrillic basic block: U+0410-U+044F covers А-Я, а-я; U+0401/U+0451 are Ё/ё
     if (codePoint >= 0x0410 && codePoint <= 0x044F) return true;
-    if (codePoint == 0x0401 || codePoint == 0x0451) return true; // Ё, ё
-    // Hyphen, to keep hyphenated words together (e.g. "из-за", "кто-то")
+    if (codePoint == 0x0401 || codePoint == 0x0451) return true;
     if (codePoint == U'-') return true;
 
     return false;
 }
 
-/**
- * @brief Converts a Unicode code point to lowercase, for the ranges we support.
- * @param codePoint Unicode scalar value.
- * @return Lowercase version of the code point, or the same value if not applicable.
- */
 char32_t toLowerCodePoint(char32_t codePoint) {
     if (codePoint >= U'A' && codePoint <= U'Z') {
         return codePoint - U'A' + U'a';
     }
-    if (codePoint >= 0x0410 && codePoint <= 0x042F) { // А-Я -> а-я
+    if (codePoint >= 0x0410 && codePoint <= 0x042F) {
         return codePoint + 0x20;
     }
-    if (codePoint == 0x0401) return 0x0451; // Ё -> ё
+    if (codePoint == 0x0401) return 0x0451;
     return codePoint;
 }
 
-/**
- * @brief Encodes a Unicode code point back into a UTF-8 byte sequence, appended to out.
- * @param codePoint Unicode scalar value to encode.
- * @param out String to append the encoded bytes to.
- */
 void appendUtf8(char32_t codePoint, std::string& out) {
     if (codePoint <= 0x7F) {
         out += static_cast<char>(codePoint);
@@ -114,18 +83,45 @@ void appendUtf8(char32_t codePoint, std::string& out) {
 }
 
 /**
- * @brief Partitions the range [low, high] around a pivot, descending by count.
- * @param data Vector being sorted.
- * @param low Index of the first element in the range.
- * @param high Index of the last element in the range.
- * @return Final index of the pivot element.
+ * @brief Splits UTF-8 text into a sequence of lowercase words, in order of appearance.
+ * @param text Input text, UTF-8 encoded.
+ * @return Vector of words in the order they appear in the text.
  */
+std::vector<std::string> splitWords(const std::string& text) {
+    std::vector<std::string> words;
+    std::string currentWord;
+
+    size_t pos = 0;
+    while (pos < text.size()) {
+        unsigned char leadByte = static_cast<unsigned char>(text[pos]);
+        int length = utf8CharLength(leadByte);
+        char32_t codePoint = decodeUtf8CodePoint(text, pos, length);
+
+        if (isWordCodePoint(codePoint)) {
+            appendUtf8(toLowerCodePoint(codePoint), currentWord);
+        } else {
+            if (!currentWord.empty()) {
+                words.push_back(currentWord);
+                currentWord.clear();
+            }
+        }
+
+        pos += static_cast<size_t>(length);
+    }
+
+    if (!currentWord.empty()) {
+        words.push_back(currentWord);
+    }
+
+    return words;
+}
+
 int partition(std::vector<WordPair>& data, int low, int high) {
     int pivot = data[high].second;
     int i = low - 1;
 
     for (int j = low; j < high; ++j) {
-        if (data[j].second > pivot) { // descending order
+        if (data[j].second > pivot) {
             ++i;
             std::swap(data[i], data[j]);
         }
@@ -134,12 +130,6 @@ int partition(std::vector<WordPair>& data, int low, int high) {
     return i + 1;
 }
 
-/**
- * @brief Recursively sorts [low, high] in descending order of count.
- * @param data Vector being sorted.
- * @param low Index of the first element in the range.
- * @param high Index of the last element in the range.
- */
 void quicksort(std::vector<WordPair>& data, int low, int high) {
     if (low < high) {
         int pivotIndex = partition(data, low, high);
@@ -159,31 +149,23 @@ std::string readFile(const std::string& path) {
 
 std::unordered_map<std::string, int> countWords(const std::string& text) {
     std::unordered_map<std::string, int> wordCount;
-    std::string currentWord;
 
-    size_t pos = 0;
-    while (pos < text.size()) {
-        unsigned char leadByte = static_cast<unsigned char>(text[pos]);
-        int length = utf8CharLength(leadByte);
-        char32_t codePoint = decodeUtf8CodePoint(text, pos, length);
-
-        if (isWordCodePoint(codePoint)) {
-            appendUtf8(toLowerCodePoint(codePoint), currentWord);
-        } else {
-            if (!currentWord.empty()) {
-                wordCount[currentWord]++;
-                currentWord.clear();
-            }
-        }
-
-        pos += static_cast<size_t>(length);
-    }
-
-    if (!currentWord.empty()) {
-        wordCount[currentWord]++;
+    for (const auto& word : splitWords(text)) {
+        wordCount[word]++;
     }
 
     return wordCount;
+}
+
+std::unordered_map<std::string, std::vector<int>> indexWordPositions(const std::string& text) {
+    std::unordered_map<std::string, std::vector<int>> positions;
+
+    auto words = splitWords(text);
+    for (int i = 0; i < static_cast<int>(words.size()); ++i) {
+        positions[words[i]].push_back(i);
+    }
+
+    return positions;
 }
 
 std::vector<WordPair> sortByCount(const std::unordered_map<std::string, int>& wordCount) {

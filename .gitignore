@@ -1,0 +1,11 @@
+build/
+*.o
+*.exe
+*.out
+docs/html/
+docs/latex/
+.cache/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile

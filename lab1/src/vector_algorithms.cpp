@@ -1,6 +1,7 @@
 #include "vector_algorithms.h"
 
 #include <utility>
+#include <set>
 
 namespace {
 
@@ -77,4 +78,16 @@ void sortOddAscEvenDesc(std::vector<int>& numbers) {
     if (!numbers.empty()) {
         quicksortByRule(numbers, 0, static_cast<int>(numbers.size()) - 1);
     }
+}
+
+std::vector<int> findUniqueInRange(const std::vector<int>& numbers, int minValue, int maxValue) {
+    std::set<int> uniqueValues;
+
+    for (int n : numbers) {
+        if (n >= minValue && n <= maxValue) {
+            uniqueValues.insert(n);
+        }
+    }
+
+    return std::vector<int>(uniqueValues.begin(), uniqueValues.end());
 }

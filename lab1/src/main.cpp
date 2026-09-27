@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::println(stderr, "Usage: {} <count|positions|primes|sort> [path_to_file]", argv[0]);
+        std::println(stderr, "Usage: {} <count|positions|primes|sort|range> [path_to_file]", argv[0]);
         return 1;
     }
 
@@ -67,6 +67,21 @@ int main(int argc, char* argv[]) {
         auto end = std::chrono::high_resolution_clock::now();
 
         for (int n : numbers) {
+            std::print("{} ", n);
+        }
+        std::println("");
+        std::println(stderr, "Time: {:.3f} ms",
+            std::chrono::duration<double, std::milli>(end - start).count());
+    } else if (mode == "range") {
+        std::vector<int> numbers = {5, 2, 8, 2, 10, 5, 3, 8, 1, 15};
+        int minValue = 2;
+        int maxValue = 8;
+
+        auto start = std::chrono::high_resolution_clock::now();
+        auto result = findUniqueInRange(numbers, minValue, maxValue);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        for (int n : result) {
             std::print("{} ", n);
         }
         std::println("");

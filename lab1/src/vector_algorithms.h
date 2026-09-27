@@ -20,3 +20,12 @@ void squarePrimes(std::vector<int>& numbers);
  * @param numbers Vector to sort, in place.
  */
 void sortOddAscEvenDesc(std::vector<int>& numbers);
+
+/**
+ * @brief Finds unique elements from the vector that fall within [minValue, maxValue].
+ * @param numbers Input vector.
+ * @param minValue Lower bound of the range (inclusive).
+ * @param maxValue Upper bound of the range (inclusive).
+ * @return Vector of unique values within the range, in ascending order.
+ */
+std::vector<int> findUniqueInRange(const std::vector<int>& numbers, int minValue, int maxValue);

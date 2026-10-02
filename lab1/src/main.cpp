@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <exception>
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -18,13 +19,18 @@ int main(int argc, char* argv[]) {
             std::println(stderr, "Usage: {} {} <path_to_file>", argv[0], mode);
             return 1;
         }
-        std::string text = readFile(argv[2]);
-
+        const bool collectPositions = mode == "positions";
         auto start = std::chrono::high_resolution_clock::now();
+        WordAnalyzer analyzer(collectPositions);
+        try {
+            analyzer.processFile(argv[2]);
+        } catch (const std::exception& error) {
+            std::println(stderr, "{}", error.what());
+            return 1;
+        }
 
         if (mode == "count") {
-            auto wordCount = countWords(text);
-            auto sorted = sortByCount(wordCount);
+            auto sorted = analyzer.sortedCounts();
             auto end = std::chrono::high_resolution_clock::now();
 
             for (const auto& [word, count] : sorted) {
@@ -33,7 +39,7 @@ int main(int argc, char* argv[]) {
             std::println(stderr, "Time: {:.3f} ms",
                 std::chrono::duration<double, std::milli>(end - start).count());
         } else {
-            auto positions = indexWordPositions(text);
+            const auto& positions = analyzer.positions();
             auto end = std::chrono::high_resolution_clock::now();
 
             for (const auto& [word, pos] : positions) {

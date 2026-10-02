@@ -1,36 +1,42 @@
 #pragma once
 
+#include <cstdint>
+#include <cstddef>
 #include <string>
+#include <string_view>
 #include <unordered_map>
-#include <vector>
 #include <utility>
+#include <vector>
 
-/**
- * @brief Reads the entire content of a file into a string.
- * @param path Path to the file.
- * @return File content as a single string (raw bytes, UTF-8 encoded).
- */
-std::string readFile(const std::string& path);
+using WordCounts = std::unordered_map<std::string, std::uint64_t>;
+using WordPositions = std::unordered_map<std::string, std::vector<std::uint64_t>>;
 
-/**
- * @brief Counts occurrences of each unique word in the given UTF-8 text.
- * @param text Input text, UTF-8 encoded.
- * @return Map from word to its occurrence count.
- */
-std::unordered_map<std::string, int> countWords(const std::string& text);
+/** Incrementally tokenizes UTF-8 text and collects either counts or positions. */
+class WordAnalyzer {
+public:
+    explicit WordAnalyzer(bool collectPositions = false);
 
-/**
- * @brief Sorts word-count pairs by count in descending order using a custom quicksort.
- * @param wordCount Map of word counts.
- * @return Vector of (word, count) pairs sorted by count descending.
- */
-std::vector<std::pair<std::string, int>> sortByCount(
-    const std::unordered_map<std::string, int>& wordCount);
+    /** Add the next text fragment. Fragments may end inside a UTF-8 character or word. */
+    void consume(std::string_view chunk);
 
-/**
- * @brief Indexes the position (word index, not byte offset) of every occurrence
- * of each unique word in the given UTF-8 text.
- * @param text Input text, UTF-8 encoded.
- * @return Map from word to a vector of its positions (0-based word index) in the text.
- */
-std::unordered_map<std::string, std::vector<int>> indexWordPositions(const std::string& text);
+    /** Read a file in fixed-size chunks and finish analysis at EOF. */
+    void processFile(const std::string& path, std::size_t chunkSize = 64 * 1024);
+
+    /** Mark input complete and flush the last word. Safe to call more than once. */
+    void finish();
+
+    const WordCounts& counts() const;
+    const WordPositions& positions() const;
+    std::vector<std::pair<std::string, std::uint64_t>> sortedCounts() const;
+
+private:
+    void finishWord();
+
+    bool collectPositions_;
+    bool finished_ = false;
+    std::uint64_t wordIndex_ = 0;
+    std::string pendingBytes_;
+    std::string currentWord_;
+    WordCounts counts_;
+    WordPositions positions_;
+};

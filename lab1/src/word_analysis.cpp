@@ -1,7 +1,6 @@
 #include "word_analysis.h"
 
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -101,15 +100,26 @@ void quicksort(std::vector<WordPair>& data, int low, int high) {
 
 } // namespace
 
-std::string readFile(const std::string& path) {
-    std::ifstream file(path, std::ios::binary);
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
-}
-
 WordAnalyzer::WordAnalyzer(bool collectPositions)
     : collectPositions_(collectPositions) {}
+
+void WordAnalyzer::processFile(const std::string& path, std::size_t chunkSize) {
+    if (chunkSize == 0) throw std::invalid_argument("Chunk size must be greater than zero");
+
+    std::ifstream file(path, std::ios::binary);
+    if (!file) throw std::runtime_error("Cannot open input file: " + path);
+
+    std::vector<char> buffer(chunkSize);
+    while (file) {
+        file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto bytesRead = file.gcount();
+        if (bytesRead > 0) {
+            consume(std::string_view(buffer.data(), static_cast<std::size_t>(bytesRead)));
+        }
+    }
+    if (file.bad()) throw std::runtime_error("Error while reading input file: " + path);
+    finish();
+}
 
 void WordAnalyzer::consume(std::string_view chunk) {
     if (finished_) throw std::logic_error("Cannot consume text after finish()");

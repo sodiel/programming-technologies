@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <exception>
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -19,12 +20,14 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const bool collectPositions = mode == "positions";
-        std::string text = readFile(argv[2]);
-
         auto start = std::chrono::high_resolution_clock::now();
         WordAnalyzer analyzer(collectPositions);
-        analyzer.consume(text);
-        analyzer.finish();
+        try {
+            analyzer.processFile(argv[2]);
+        } catch (const std::exception& error) {
+            std::println(stderr, "{}", error.what());
+            return 1;
+        }
 
         if (mode == "count") {
             auto sorted = analyzer.sortedCounts();

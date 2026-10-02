@@ -2,11 +2,11 @@
 
 #include <fstream>
 #include <sstream>
-#include <cctype>
+#include <stdexcept>
 
 namespace {
 
-using WordPair = std::pair<std::string, int>;
+using WordPair = std::pair<std::string, std::uint64_t>;
 
 int utf8CharLength(unsigned char leadByte) {
     if ((leadByte & 0x80) == 0x00) return 1;
@@ -16,31 +16,6 @@ int utf8CharLength(unsigned char leadByte) {
     return 1;
 }
 
-char32_t decodeUtf8CodePoint(const std::string& text, size_t pos, int length) {
-    if (pos + static_cast<size_t>(length) > text.size()) return 0;
-
-    unsigned char first = static_cast<unsigned char>(text[pos]);
-    char32_t codePoint = 0;
-
-    if (length == 1) {
-        codePoint = first;
-    } else if (length == 2) {
-        codePoint = first & 0x1F;
-    } else if (length == 3) {
-        codePoint = first & 0x0F;
-    } else if (length == 4) {
-        codePoint = first & 0x07;
-    }
-
-    for (int i = 1; i < length; ++i) {
-        unsigned char continuationByte = static_cast<unsigned char>(text[pos + i]);
-        if ((continuationByte & 0xC0) != 0x80) return 0;
-        codePoint = (codePoint << 6) | (continuationByte & 0x3F);
-    }
-
-    return codePoint;
-}
-
 bool isWordCodePoint(char32_t codePoint) {
     if ((codePoint >= U'a' && codePoint <= U'z') ||
         (codePoint >= U'A' && codePoint <= U'Z')) {
@@ -48,9 +23,7 @@ bool isWordCodePoint(char32_t codePoint) {
     }
     if (codePoint >= 0x0410 && codePoint <= 0x044F) return true;
     if (codePoint == 0x0401 || codePoint == 0x0451) return true;
-    if (codePoint == U'-') return true;
-
-    return false;
+    return codePoint == U'-';
 }
 
 char32_t toLowerCodePoint(char32_t codePoint) {
@@ -82,42 +55,30 @@ void appendUtf8(char32_t codePoint, std::string& out) {
     }
 }
 
-/**
- * @brief Splits UTF-8 text into a sequence of lowercase words, in order of appearance.
- * @param text Input text, UTF-8 encoded.
- * @return Vector of words in the order they appear in the text.
- */
-std::vector<std::string> splitWords(const std::string& text) {
-    std::vector<std::string> words;
-    std::string currentWord;
+bool decodeCodePoint(const std::string& bytes, std::size_t pos, int length,
+                     char32_t& codePoint) {
+    if (pos + static_cast<std::size_t>(length) > bytes.size()) return false;
 
-    size_t pos = 0;
-    while (pos < text.size()) {
-        unsigned char leadByte = static_cast<unsigned char>(text[pos]);
-        int length = utf8CharLength(leadByte);
-        char32_t codePoint = decodeUtf8CodePoint(text, pos, length);
+    const auto first = static_cast<unsigned char>(bytes[pos]);
+    if (length == 1) {
+        codePoint = first;
+        return true;
+    }
 
-        if (isWordCodePoint(codePoint)) {
-            appendUtf8(toLowerCodePoint(codePoint), currentWord);
-        } else {
-            if (!currentWord.empty()) {
-                words.push_back(currentWord);
-                currentWord.clear();
-            }
+    codePoint = length == 2 ? first & 0x1F : length == 3 ? first & 0x0F : first & 0x07;
+    for (int i = 1; i < length; ++i) {
+        const auto continuation = static_cast<unsigned char>(bytes[pos + i]);
+        if ((continuation & 0xC0) != 0x80) {
+            codePoint = 0;
+            return true;
         }
-
-        pos += static_cast<size_t>(length);
+        codePoint = (codePoint << 6) | (continuation & 0x3F);
     }
-
-    if (!currentWord.empty()) {
-        words.push_back(currentWord);
-    }
-
-    return words;
+    return true;
 }
 
 int partition(std::vector<WordPair>& data, int low, int high) {
-    int pivot = data[high].second;
+    const auto pivot = data[high].second;
     int i = low - 1;
 
     for (int j = low; j < high; ++j) {
@@ -132,7 +93,7 @@ int partition(std::vector<WordPair>& data, int low, int high) {
 
 void quicksort(std::vector<WordPair>& data, int low, int high) {
     if (low < high) {
-        int pivotIndex = partition(data, low, high);
+        const int pivotIndex = partition(data, low, high);
         quicksort(data, low, pivotIndex - 1);
         quicksort(data, pivotIndex + 1, high);
     }
@@ -141,39 +102,72 @@ void quicksort(std::vector<WordPair>& data, int low, int high) {
 } // namespace
 
 std::string readFile(const std::string& path) {
-    std::ifstream file(path);
+    std::ifstream file(path, std::ios::binary);
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
 }
 
-std::unordered_map<std::string, int> countWords(const std::string& text) {
-    std::unordered_map<std::string, int> wordCount;
+WordAnalyzer::WordAnalyzer(bool collectPositions)
+    : collectPositions_(collectPositions) {}
 
-    for (const auto& word : splitWords(text)) {
-        wordCount[word]++;
+void WordAnalyzer::consume(std::string_view chunk) {
+    if (finished_) throw std::logic_error("Cannot consume text after finish()");
+    pendingBytes_.append(chunk);
+
+    std::size_t pos = 0;
+    while (pos < pendingBytes_.size()) {
+        const int length = utf8CharLength(static_cast<unsigned char>(pendingBytes_[pos]));
+        if (pos + static_cast<std::size_t>(length) > pendingBytes_.size()) break;
+
+        char32_t codePoint = 0;
+        if (!decodeCodePoint(pendingBytes_, pos, length, codePoint)) break;
+        if (codePoint == 0) {
+            // A malformed sequence is treated as a separator, one byte at a time.
+            ++pos;
+            finishWord();
+            continue;
+        }
+
+        if (isWordCodePoint(codePoint)) {
+            appendUtf8(toLowerCodePoint(codePoint), currentWord_);
+        } else {
+            finishWord();
+        }
+        pos += static_cast<std::size_t>(length);
     }
-
-    return wordCount;
+    pendingBytes_.erase(0, pos);
 }
 
-std::unordered_map<std::string, std::vector<int>> indexWordPositions(const std::string& text) {
-    std::unordered_map<std::string, std::vector<int>> positions;
-
-    auto words = splitWords(text);
-    for (int i = 0; i < static_cast<int>(words.size()); ++i) {
-        positions[words[i]].push_back(i);
-    }
-
-    return positions;
+void WordAnalyzer::finish() {
+    if (finished_) return;
+    // Incomplete UTF-8 bytes at EOF are separators.
+    pendingBytes_.clear();
+    finishWord();
+    finished_ = true;
 }
 
-std::vector<WordPair> sortByCount(const std::unordered_map<std::string, int>& wordCount) {
-    std::vector<WordPair> sorted(wordCount.begin(), wordCount.end());
+const WordCounts& WordAnalyzer::counts() const {
+    return counts_;
+}
 
-    if (!sorted.empty()) {
-        quicksort(sorted, 0, static_cast<int>(sorted.size()) - 1);
-    }
+const WordPositions& WordAnalyzer::positions() const {
+    return positions_;
+}
 
+std::vector<std::pair<std::string, std::uint64_t>> WordAnalyzer::sortedCounts() const {
+    std::vector<WordPair> sorted(counts_.begin(), counts_.end());
+    if (!sorted.empty()) quicksort(sorted, 0, static_cast<int>(sorted.size()) - 1);
     return sorted;
+}
+
+void WordAnalyzer::finishWord() {
+    if (currentWord_.empty()) return;
+    if (collectPositions_) {
+        positions_[currentWord_].push_back(wordIndex_);
+    } else {
+        ++counts_[currentWord_];
+    }
+    ++wordIndex_;
+    currentWord_.clear();
 }

@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.23)
 project(programming-technologies)
 
-# CMake instructions to make the static lib
-add_library(libvalid SHARED src/form_validator.cpp)
-add_library(libmd SHARED src/markdown_analyzer.cpp)
-add_library(librandgen SHARED src/random_user_generator.cpp)
+add_library(valid_static STATIC src/form_validator.cpp)
+add_library(md_static STATIC src/markdown_analyzer.cpp)
+add_library(randgen_static STATIC src/random_user_generator.cpp)
 
-add_executable(lab3
-        src/main.cpp
-)
+add_library(valid_shared SHARED src/form_validator.cpp)
+add_library(md_shared SHARED src/markdown_analyzer.cpp)
+add_library(randgen_shared SHARED src/random_user_generator.cpp)
 
+add_executable(lab3_static src/main.cpp)
+target_link_libraries(lab3_static PRIVATE valid_static md_static randgen_static)
 
-target_include_directories(lab3 PRIVATE src)
-target_compile_definitions(lab3 PRIVATE LAB3_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
-target_link_libraries(lab3 PRIVATE libvalid libmd librandgen)
+add_executable(lab3_shared src/main.cpp)
+target_link_libraries(lab3_shared PRIVATE valid_shared md_shared randgen_shared)

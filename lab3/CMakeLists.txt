@@ -7,5 +7,7 @@ add_executable(lab3
         src/random_user_generator.cpp
 )
 
-target_include_directories(lab2 PRIVATE src)
-target_compile_definitions(lab2 PRIVATE LAB2_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+
+target_include_directories(lab3 PRIVATE src)
+target_compile_definitions(lab3 PRIVATE LAB3_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_link_libraries(lab3 PRIVATE libvalid)
